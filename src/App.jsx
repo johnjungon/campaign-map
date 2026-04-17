@@ -185,8 +185,7 @@ async function fetchRecommendSpots() {
       }
     })
   }
-  window._fetchSpots = fetchSpots
-  useEffect(() => {
+    useEffect(() => {
     if (!map) return
     markersRef.current.forEach(({ marker, infowindow }) => {
       infowindow.close()
@@ -228,9 +227,11 @@ async function fetchRecommendSpots() {
 window._deleteSpot = async (id) => {
   if (window.confirm('이 장소를 삭제할까요?')) {
     await supabase.from('campaign_spots').delete().eq('id', id)
-    window._fetchSpots && window._fetchSpots()
+    const { data } = await supabase.from('campaign_spots').select('*').order('created_at', { ascending: false })
+    if (data) setSpots(data)
   }
 }
+
 
   function handleSearch() {
     if (!searchKeyword.trim() || !psRef.current) return

@@ -250,7 +250,10 @@ window._deleteSpot = async (id) => {
       }
     })
   }
-
+async function fetchSpots() {
+    const { data } = await supabase.from('campaign_spots').select('*').order('created_at', { ascending: false })
+    if (data) setSpots(data)
+  }
   async function handleSubmit() {
     if (!form.title || !clickPos) return
     await supabase.from('campaign_spots').insert([{

@@ -75,11 +75,116 @@ function App() {
     if (map) fetchSpots()
   }, [map])
 
-  async function fetchSpots() {
-    const { data } = await supabase.from('campaign_spots').select('*').order('scheduled_at', { ascending: true })
-    if (data) setSpots(data)
-  }
+async function fetchRecommendSpots() {
+    if (!map) return
 
+    const center = map.getCenter()
+    const lat = center.getLat()
+    const lng = center.getLng()
+
+    // 1. 카카오 좌표 → 행정동 변환
+    const geocoder = new window.kakao.maps.services.Geocoder()
+    geocoder.coord2RegionCode(lng, lat, async (result, status) => {
+      if (status !== window.kakao.maps.services.Status.OK) return
+
+      const region = result.find(r => r.region_type === 'H')
+      if (!region) return
+
+      const sigungu = region.region_2depth_name
+      const sido = region.region_1depth_name
+
+      // 2. 공공데이터 API로 해당 시군구 읍면동 인구 조회
+      try {
+        const res = await fetch(
+          `https://api.odcloud.kr/api/15097972/v1/uddi:b1817ce4-c4a0-4b49-a23c-9ec2d58f3db4?serviceKey=${import.meta.env.VITE_PUBLIC_DATA_KEY}&page=1&perPage=100&returnType=JSON`
+        )
+        const data = await res.json()
+        if (!data.data) return
+
+        // 같은 시군구 데이터만 필터
+        const filtered = data.data.filter(d =>
+          d.시도명.includes(sido.slice(0, 2)) &&
+          d.시군구명.includes(sigungu)
+        )
+
+        if (filtered.length === 0) {
+          alert(`${sigungu} 인구 데이터를 찾을 수 없어요`)
+          return
+        }
+
+        // 3. 읍면동별 유권자(18세 이상) 수 계산
+        const dongData = filtered.map(d => {
+          let voters = 0
+          for (let age = 18; age <= 110; age++) {
+            const key = age === 110 ? '110세이상 남자' : `${age}세남자`
+            const key2 = age === 110 ? '110세이상 여자' : `${age}세여자`
+            voters += (d[key] || 0) + (d[key2] || 0)
+          }
+          return {
+            dong: d.읍면동명,
+            voters,
+            total: d.계,
+            sigungu: d.시군구명
+          }
+        }).sort((a, b) => b.voters - a.voters)
+
+        // 4. 기존 추천 마커 제거
+        recommendMarkersRef.current.forEach(m => m.setMap(null))
+        recommendMarkersRef.current = []
+
+        // 5. 상위 5개 읍면동 좌표 검색 후 마커 표시
+        const top5 = dongData.slice(0, 5)
+        for (let i = 0; i < top5.length; i++) {
+          const item = top5[i]
+          await new Promise(resolve => {
+            psRef.current.keywordSearch(`${sigungu} ${item.dong}`, (result, status) => {
+              if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
+                const pos = result[0]
+                const markerLat = parseFloat(pos.y)
+                const markerLng = parseFloat(pos.x)
+
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="52" viewBox="0 0 40 52">
+                  <path d="M20 0C9 0 0 9 0 20c0 13 20 32 20 32s20-19 20-32C40 9 31 0 20 0z" fill="#6B21A8"/>
+                  <circle cx="20" cy="20" r="12" fill="white"/>
+                  <text x="20" y="16" text-anchor="middle" font-size="9" font-weight="bold" fill="#6B21A8">유권자</text>
+                  <text x="20" y="27" text-anchor="middle" font-size="8" fill="#6B21A8">${(item.voters/1000).toFixed(1)}K</text>
+                </svg>`
+
+                const markerImage = new window.kakao.maps.MarkerImage(
+                  'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
+                  new window.kakao.maps.Size(40, 52),
+                  { offset: new window.kakao.maps.Point(20, 52) }
+                )
+                const marker = new window.kakao.maps.Marker({
+                  map,
+                  position: new window.kakao.maps.LatLng(markerLat, markerLng),
+                  image: markerImage
+                })
+                const infowindow = new window.kakao.maps.InfoWindow({
+                  content: `<div style="padding:10px;font-size:13px;min-width:160px">
+                    <b>🗳️ ${item.dong}</b><br/>
+                    <span style="color:#6B21A8;font-weight:bold">유권자: ${item.voters.toLocaleString()}명</span><br/>
+                    <span style="font-size:11px;color:#666">전체 인구: ${item.total.toLocaleString()}명</span><br/>
+                    <span style="font-size:11px;color:#666">유권자 비율: ${(item.voters/item.total*100).toFixed(1)}%</span>
+                  </div>`
+                })
+                window.kakao.maps.event.addListener(marker, 'click', () => infowindow.open(map, marker))
+                recommendMarkersRef.current.push(marker)
+              }
+              resolve()
+            })
+          })
+        }
+
+        // 결과 알림
+        alert(`${sigungu} 유권자 TOP 5\n${top5.map((d, i) => `${i+1}. ${d.dong}: ${d.voters.toLocaleString()}명`).join('\n')}`)
+
+      } catch (err) {
+        console.error(err)
+        alert('인구 데이터 조회 실패')
+      }
+    })
+  }
   useEffect(() => {
     if (!map) return
     markersRef.current.forEach(({ marker, infowindow }) => {

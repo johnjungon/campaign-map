@@ -127,91 +127,144 @@ function App() {
   }
 
   async function fetchRecommendSpots() {
-    if (!map) return
-    const center = map.getCenter()
-    const lat = center.getLat()
-    const lng = center.getLng()
+   if (!map) return
 
-    const geocoder = new window.kakao.maps.services.Geocoder()
-    geocoder.coord2RegionCode(lng, lat, async (result, status) => {
-      if (status !== window.kakao.maps.services.Status.OK) return
-      const region = result.find(r => r.region_type === 'H')
-      if (!region) return
+  const center = map.getCenter()
+  const lat = center.getLat()
+  const lng = center.getLng()
 
-      const sigungu = region.region_2depth_name
-      const sido = region.region_1depth_name
+  const geocoder = new window.kakao.maps.services.Geocoder()
+  geocoder.coord2RegionCode(lng, lat, async (result, status) => {
+    if (status !== window.kakao.maps.services.Status.OK) return
+    const region = result.find(r => r.region_type === 'H')
+    if (!region) return
 
-      try {
-        const res = await fetch(
-          `https://api.odcloud.kr/api/15097972/v1/uddi:b1817ce4-c4a0-4b49-a23c-9ec2d58f3db4?serviceKey=${import.meta.env.VITE_PUBLIC_DATA_KEY}&page=1&perPage=100&returnType=JSON`
-        )
-        const data = await res.json()
-        if (!data.data) return
+    const sigungu = region.region_2depth_name
+    const sido = region.region_1depth_name
+    console.log('sido:', sido, 'sigungu:', sigungu)
 
-        const filtered = data.data.filter(d =>
-          d.시도명.includes(sido.slice(0, 2)) &&
-          d.시군구명.includes(sigungu)
-        )
-        if (filtered.length === 0) { alert(`${sigungu} 인구 데이터를 찾을 수 없어요`); return }
+    try {
+      // 1. 유권자 데이터 조회
+      const sigunguMain = sigungu.split(' ')[0]
+      const url = `https://api.odcloud.kr/api/15097972/v1/uddi:b1817ce4-c4a0-4b49-a23c-9ec2d58f3db4?serviceKey=${import.meta.env.VITE_PUBLIC_DATA_KEY}&page=1&perPage=100&returnType=JSON&cond%5B%EC%8B%9C%EA%B5%B0%EA%B5%AC%EB%AA%85%3A%3ALIKE%5D=${encodeURIComponent(sigunguMain)}`
+      const res = await fetch(url)
+      const data = await res.json()
+      if (!data.data) return
 
-        const dongData = filtered.map(d => {
-          let voters = 0
-          for (let age = 18; age <= 110; age++) {
-            const key = age === 110 ? '110세이상 남자' : `${age}세남자`
-            const key2 = age === 110 ? '110세이상 여자' : `${age}세여자`
-            voters += (d[key] || 0) + (d[key2] || 0)
-          }
-          return { dong: d.읍면동명, voters, total: d.계 }
-        }).sort((a, b) => b.voters - a.voters)
+      const filtered = data.data.filter(d => {
+      const sidoMatch = d.시도명.includes(sido.slice(0, 2))
+      const parts = sigungu.split(' ')
+      // 구 단위가 있으면 읍면동명으로 필터 (처인구→처인구 포함 데이터)
+      // 시군구명은 "용인시"로만 저장되므로 시만 매칭
+      const sigunguMatch = d.시군구명.includes(parts[0])
+      return sidoMatch && sigunguMatch
+     })
+      if (filtered.length === 0) { alert(`${sigungu} 인구 데이터를 찾을 수 없어요`); return }
 
-        recommendMarkersRef.current.forEach(m => m.setMap(null))
-        recommendMarkersRef.current = []
-
-        const top5 = dongData.slice(0, 5)
-        for (let i = 0; i < top5.length; i++) {
-          const item = top5[i]
-          await new Promise(resolve => {
-            psRef.current.keywordSearch(`${sigungu} ${item.dong}`, (result, status) => {
-              if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
-                const pos = result[0]
-                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="52" viewBox="0 0 40 52">
-                  <path d="M20 0C9 0 0 9 0 20c0 13 20 32 20 32s20-19 20-32C40 9 31 0 20 0z" fill="#6B21A8"/>
-                  <circle cx="20" cy="20" r="12" fill="white"/>
-                  <text x="20" y="16" text-anchor="middle" font-size="9" font-weight="bold" fill="#6B21A8">유권자</text>
-                  <text x="20" y="27" text-anchor="middle" font-size="8" fill="#6B21A8">${(item.voters/1000).toFixed(1)}K</text>
-                </svg>`
-                const markerImage = new window.kakao.maps.MarkerImage(
-                  'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
-                  new window.kakao.maps.Size(40, 52),
-                  { offset: new window.kakao.maps.Point(20, 52) }
-                )
-                const marker = new window.kakao.maps.Marker({
-                  map,
-                  position: new window.kakao.maps.LatLng(parseFloat(pos.y), parseFloat(pos.x)),
-                  image: markerImage
-                })
-                const infowindow = new window.kakao.maps.InfoWindow({
-                  content: `<div style="padding:10px;font-size:13px;min-width:160px">
-                    <b>🗳️ ${item.dong}</b><br/>
-                    <span style="color:#6B21A8;font-weight:bold">유권자: ${item.voters.toLocaleString()}명</span><br/>
-                    <span style="font-size:11px;color:#666">전체 인구: ${item.total.toLocaleString()}명</span><br/>
-                    <span style="font-size:11px;color:#666">유권자 비율: ${(item.voters/item.total*100).toFixed(1)}%</span>
-                  </div>`
-                })
-                window.kakao.maps.event.addListener(marker, 'click', () => infowindow.open(map, marker))
-                recommendMarkersRef.current.push(marker)
-              }
-              resolve()
-            })
-          })
+      // 2. 읍면동별 유권자 계산
+      const dongData = filtered.map(d => {
+        let voters = 0
+        for (let age = 18; age <= 110; age++) {
+          const key = age === 110 ? '110세이상 남자' : `${age}세남자`
+          const key2 = age === 110 ? '110세이상 여자' : `${age}세여자`
+          voters += (d[key] || 0) + (d[key2] || 0)
         }
-        alert(`${sigungu} 유권자 TOP 5\n${top5.map((d, i) => `${i+1}. ${d.dong}: ${d.voters.toLocaleString()}명`).join('\n')}`)
-      } catch (err) {
-        console.error(err)
-        alert('인구 데이터 조회 실패')
+        return { dong: d.읍면동명, voters, total: d.계 }
+      }).sort((a, b) => b.voters - a.voters)
+
+      const top10 = dongData.slice(0, 10)
+
+      // 3. 각 동 좌표 + 시설밀집도 조회
+      const categories = ['CS2', 'BK9', 'SW8', 'SC4']
+      const scored = []
+
+      for (const item of top10) {
+        // 동 좌표 먼저 가져오기
+        const coords = await new Promise(resolve => {
+          psRef.current.keywordSearch(`${sigunguMain} ${item.dong}`, (result, status) => {
+            if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
+              resolve({ x: result[0].x, y: result[0].y })
+            } else resolve(null)
+          })
+        })
+        if (!coords) continue
+
+        // 각 카테고리 시설 개수 카운트
+        let facilityCount = 0
+        for (const cat of categories) {
+          const count = await new Promise(resolve => {
+            psRef.current.categorySearch(cat,
+              (result, status, pagination) => {
+                if (status === window.kakao.maps.services.Status.OK) {
+                  resolve(pagination.totalCount)
+                } else resolve(0)
+              },
+              {
+                location: new window.kakao.maps.LatLng(parseFloat(coords.y), parseFloat(coords.x)),
+                radius: 1500
+              }
+            )
+          })
+          facilityCount += count
+        }
+
+        // 4. 복합 점수 계산 (유권자 70% + 시설밀집 30%)
+        const voterScore = item.voters
+        const facilityScore = facilityCount * 100
+        const totalScore = voterScore * 0.7 + facilityScore * 0.3
+
+        scored.push({ ...item, coords, facilityCount, totalScore })
+        console.log(`${item.dong}: 유권자 ${item.voters}, 시설 ${facilityCount}개, 점수 ${Math.round(totalScore)}`)
       }
-    })
-  }
+
+      // 5. 점수 TOP3 선정
+      scored.sort((a, b) => b.totalScore - a.totalScore)
+      const top3 = scored.slice(0, 3)
+
+      // 6. 기존 추천 마커 제거 후 표시
+      recommendMarkersRef.current.forEach(m => m.setMap(null))
+      recommendMarkersRef.current = []
+
+      top3.forEach((item, i) => {
+        const rank = ['🥇', '🥈', '🥉'][i]
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="56" viewBox="0 0 44 56">
+          <path d="M22 0C10 0 0 10 0 22c0 14 22 34 22 34s22-20 22-34C44 10 34 0 22 0z" fill="#6B21A8"/>
+          <circle cx="22" cy="22" r="14" fill="white"/>
+          <text x="22" y="18" text-anchor="middle" font-size="11" font-weight="bold" fill="#6B21A8">${rank}</text>
+          <text x="22" y="30" text-anchor="middle" font-size="8" fill="#6B21A8">${(item.voters/1000).toFixed(1)}K</text>
+        </svg>`
+
+        const markerImage = new window.kakao.maps.MarkerImage(
+          'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
+          new window.kakao.maps.Size(44, 56),
+          { offset: new window.kakao.maps.Point(22, 56) }
+        )
+        const marker = new window.kakao.maps.Marker({
+          map,
+          position: new window.kakao.maps.LatLng(parseFloat(item.coords.y), parseFloat(item.coords.x)),
+          image: markerImage
+        })
+        const infowindow = new window.kakao.maps.InfoWindow({
+          content: `<div style="padding:10px;font-size:13px;min-width:180px">
+            <b>${rank} ${item.dong}</b><br/>
+            <span style="color:#6B21A8;font-weight:bold">유권자: ${item.voters.toLocaleString()}명</span><br/>
+            <span style="font-size:11px;color:#666">시설 밀집: ${item.facilityCount}개</span><br/>
+            <span style="font-size:11px;color:#666">유권자 비율: ${(item.voters/item.total*100).toFixed(1)}%</span><br/>
+            <span style="font-size:10px;color:#999">종합점수: ${Math.round(item.totalScore).toLocaleString()}</span>
+          </div>`
+        })
+        window.kakao.maps.event.addListener(marker, 'click', () => infowindow.open(map, marker))
+        recommendMarkersRef.current.push(marker)
+      })
+
+      alert(`🗳️ ${sigungu} 유세 추천 TOP 3\n${top3.map((d, i) => `${['🥇','🥈','🥉'][i]} ${d.dong}\n   유권자 ${d.voters.toLocaleString()}명 · 시설 ${d.facilityCount}개`).join('\n')}`)
+
+    } catch (err) {
+      console.error(err)
+      alert('추천 데이터 조회 실패')
+    }
+  })
+}
 
   function handleSearch() {
     if (!searchKeyword.trim() || !psRef.current) return
@@ -273,7 +326,7 @@ function App() {
     : spots
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0 }}>
       <div style={{ padding: '10px 16px', background: '#1a237e', color: 'white', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
         <h1 style={{ margin: 0, fontSize: '18px', whiteSpace: 'nowrap' }}>🗺️ 유세맵</h1>
         <div style={{ display: 'flex', gap: '6px', flex: 1, maxWidth: '400px' }}>

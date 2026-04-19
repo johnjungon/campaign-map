@@ -29,7 +29,7 @@ function App() {
   const [clickPos, setClickPos] = useState(null)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [filterDate, setFilterDate] = useState('')
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const markersRef = useRef([])
   const recommendMarkersRef = useRef([])

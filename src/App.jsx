@@ -77,6 +77,13 @@ function App() {
   }, [map])
 
   useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  useEffect(() => {
     if (!map) return
     markersRef.current.forEach(({ marker, infowindow }) => {
       infowindow.close()
@@ -84,13 +91,6 @@ function App() {
     })
     markersRef.current = []
 
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768)
-    check()
-    window.addEventListener('resize', check)
-    return () => window.removeEventListener('resize', check)
-  }, [])
-    
     const filtered = filterDate
       ? spots.filter(s => s.scheduled_at && s.scheduled_at.slice(0, 10) === filterDate)
       : spots
@@ -122,13 +122,14 @@ function App() {
     })
   }, [map, spots, filterDate])
 
-  window._deleteSpot = async (id) => {
-    if (window.confirm('이 장소를 삭제할까요?')) {
+   useEffect(() => {
+    window._deleteSpot = async (id) => {
+     if (window.confirm('이 장소를 삭제할까요?')) {
       await supabase.from('campaign_spots').delete().eq('id', id)
-      const { data } = await supabase.from('campaign_spots').select('*').order('created_at', { ascending: false })
-      if (data) setSpots(data)
+       fetchSpots()
+      }
     }
-  }
+   })
 
   async function fetchSpots() {
     const { data } = await supabase.from('campaign_spots').select('*').order('created_at', { ascending: false })

@@ -29,6 +29,8 @@ function App() {
   const [clickPos, setClickPos] = useState(null)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [filterDate, setFilterDate] = useState('')
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const markersRef = useRef([])
   const recommendMarkersRef = useRef([])
   const psRef = useRef(null)
@@ -82,6 +84,12 @@ function App() {
     })
     markersRef.current = []
 
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+    
     const filtered = filterDate
       ? spots.filter(s => s.scheduled_at && s.scheduled_at.slice(0, 10) === filterDate)
       : spots
@@ -325,10 +333,39 @@ function App() {
     ? spots.filter(s => s.scheduled_at && s.scheduled_at.slice(0, 10) === filterDate)
     : spots
 
-  return (
-      <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0 }}>
-      <div style={{ padding: '10px 16px', background: '#1a237e', color: 'white', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-        <h1 style={{ margin: 0, fontSize: '18px', whiteSpace: 'nowrap' }}>🗺️ 유세맵</h1>
+전체 return 부분을 아래로 교체해줘요. state 선언 부분에도 추가 필요해요.
+
+먼저 state 선언 부분에 추가:
+
+**찾기:**
+```js
+const [filterDate, setFilterDate] = useState('')
+```
+**교체:**
+```js
+const [filterDate, setFilterDate] = useState('')
+const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+const [drawerOpen, setDrawerOpen] = useState(false)
+```
+
+그리고 useEffect들 중 아무거나 아래에 추가:
+```js
+useEffect(() => {
+  const handleResize = () => setIsMobile(window.innerWidth < 768)
+  window.addEventListener('resize', handleResize)
+  return () => window.removeEventListener('resize', handleResize)
+}, [])
+```
+
+그 다음 return 전체를 교체:
+
+```jsx
+return (
+  <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0 }}>
+    {/* 상단 헤더 */}
+    <div style={{ padding: '10px 16px', background: '#1a237e', color: 'white', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+      <h1 style={{ margin: 0, fontSize: '18px', whiteSpace: 'nowrap' }}>🗺️ 유세맵</h1>
+      {!isMobile && (
         <div style={{ display: 'flex', gap: '6px', flex: 1, maxWidth: '400px' }}>
           <input
             placeholder="장소 검색 (예: 용인시청)"
@@ -342,10 +379,12 @@ function App() {
             검색
           </button>
         </div>
-        <button onClick={fetchRecommendSpots}
-          style={{ padding: '6px 12px', background: '#6B21A8', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          🗳️ 유권자 추천
-        </button>
+      )}
+      <button onClick={fetchRecommendSpots}
+        style={{ padding: '6px 12px', background: '#6B21A8', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+        🗳️ 유권자 추천
+      </button>
+      {!isMobile && (
         <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
           {Object.entries(STATUS).map(([key, { label, color }]) => (
             <span key={key} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -354,9 +393,35 @@ function App() {
             </span>
           ))}
         </div>
-      </div>
+      )}
+      {isMobile && (
+        <button onClick={() => setDrawerOpen(o => !o)}
+          style={{ marginLeft: 'auto', padding: '6px 12px', background: 'rgba(255,255,255,0.2)', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+          📋 {drawerOpen ? '지도보기' : '목록보기'}
+        </button>
+      )}
+    </div>
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+    {/* 모바일 검색창 */}
+    {isMobile && (
+      <div style={{ padding: '8px 12px', background: '#1a237e', display: 'flex', gap: '6px' }}>
+        <input
+          placeholder="장소 검색"
+          value={searchKeyword}
+          onChange={e => setSearchKeyword(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSearch()}
+          style={{ flex: 1, padding: '6px 10px', borderRadius: '6px', border: 'none', fontSize: '13px' }}
+        />
+        <button onClick={handleSearch}
+          style={{ padding: '6px 12px', background: '#ffd700', color: '#1a237e', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+          검색
+        </button>
+      </div>
+    )}
+
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+      {/* 데스크탑 사이드패널 */}
+      {!isMobile && (
         <div style={{ width: '300px', background: '#f8f9fa', borderRight: '1px solid #e0e0e0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
           <div style={{ padding: '10px 16px', borderBottom: '1px solid #e0e0e0', background: 'white' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -413,57 +478,123 @@ function App() {
             ))}
           </div>
         </div>
+      )}
 
-        <div style={{ flex: 1, position: 'relative' }}>
-          <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
-          {showForm && (
-            <div style={{
-              position: 'absolute', top: '20px', right: '20px', zIndex: 999,
-              background: 'white', borderRadius: '12px', padding: '20px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)', width: '280px'
-            }}>
-              <h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>📍 유세 장소 추가</h3>
-              <input placeholder="장소명 *" value={form.title}
-                onChange={e => setForm({ ...form, title: e.target.value })}
-                style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box' }} />
-              <input placeholder="담당자" value={form.assignee}
-                onChange={e => setForm({ ...form, assignee: e.target.value })}
-                style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box' }} />
-              <input type="datetime-local" value={form.scheduled_at}
-                onChange={e => setForm({ ...form, scheduled_at: e.target.value })}
-                style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box' }} />
-              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
-                style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box' }}>
-                {Object.entries(STATUS).map(([key, { label }]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
-              <textarea placeholder="메모" value={form.description}
-                onChange={e => setForm({ ...form, description: e.target.value })}
-                style={{ width: '100%', padding: '8px', marginBottom: '12px', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box', height: '60px', resize: 'none' }} />
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={handleSubmit}
-                  style={{ flex: 1, padding: '8px', background: '#1a237e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                  저장
-                </button>
-                <button onClick={() => {
-                  if (tempMarkerRef.current) {
-                    tempMarkerRef.current.setMap(null)
-                    tempMarkerRef.current = null
-                  }
-                  setShowForm(false)
-                  setClickPos(null)
-                }}
-                  style={{ flex: 1, padding: '8px', background: '#eee', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                  취소
-                </button>
-              </div>
+      {/* 지도 */}
+      <div style={{ flex: 1, position: 'relative' }}>
+        <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+        {showForm && (
+          <div style={{
+            position: 'absolute', top: '20px', right: '20px', zIndex: 999,
+            background: 'white', borderRadius: '12px', padding: '20px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)', width: '280px'
+          }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '15px' }}>📍 유세 장소 추가</h3>
+            <input placeholder="장소명 *" value={form.title}
+              onChange={e => setForm({ ...form, title: e.target.value })}
+              style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box' }} />
+            <input placeholder="담당자" value={form.assignee}
+              onChange={e => setForm({ ...form, assignee: e.target.value })}
+              style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box' }} />
+            <input type="datetime-local" value={form.scheduled_at}
+              onChange={e => setForm({ ...form, scheduled_at: e.target.value })}
+              style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box' }} />
+            <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}
+              style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box' }}>
+              {Object.entries(STATUS).map(([key, { label }]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+            <textarea placeholder="메모" value={form.description}
+              onChange={e => setForm({ ...form, description: e.target.value })}
+              style={{ width: '100%', padding: '8px', marginBottom: '12px', border: '1px solid #ddd', borderRadius: '6px', boxSizing: 'border-box', height: '60px', resize: 'none' }} />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={handleSubmit}
+                style={{ flex: 1, padding: '8px', background: '#1a237e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                저장
+              </button>
+              <button onClick={() => {
+                if (tempMarkerRef.current) {
+                  tempMarkerRef.current.setMap(null)
+                  tempMarkerRef.current = null
+                }
+                setShowForm(false)
+                setClickPos(null)
+              }}
+                style={{ flex: 1, padding: '8px', background: '#eee', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+                취소
+              </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* 모바일 바텀 드로어 */}
+      {isMobile && drawerOpen && (
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1000,
+          background: 'white', borderRadius: '16px 16px 0 0',
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
+          maxHeight: '60vh', display: 'flex', flexDirection: 'column'
+        }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <b style={{ fontSize: '14px' }}>📋 유세 장소 목록</b>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <span style={{ fontSize: '12px', color: '#888' }}>{filteredSpots.length}곳</span>
+              <button onClick={() => setDrawerOpen(false)}
+                style={{ background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#888' }}>✕</button>
+            </div>
+          </div>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid #eee', display: 'flex', gap: '6px' }}>
+            <input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)}
+              style={{ flex: 1, padding: '5px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '12px' }} />
+            {filterDate && (
+              <button onClick={() => setFilterDate('')}
+                style={{ padding: '5px 8px', background: '#eee', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                전체
+              </button>
+            )}
+          </div>
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {filteredSpots.length === 0 && (
+              <div style={{ padding: '24px', textAlign: 'center', color: '#aaa', fontSize: '13px' }}>
+                {filterDate ? '해당 날짜 일정이 없어요' : '지도를 클릭해서 유세 장소를 추가하세요'}
+              </div>
+            )}
+            {filteredSpots.map(spot => (
+              <div key={spot.id}
+                onClick={() => { moveToSpot(spot); setDrawerOpen(false) }}
+                style={{ padding: '12px 16px', borderBottom: '1px solid #eee', cursor: 'pointer' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <b style={{ fontSize: '14px', color: '#1a237e' }}>{spot.title}</b>
+                  <button onClick={e => { e.stopPropagation(); handleDelete(spot.id) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f44336', fontSize: '16px', padding: '0' }}>
+                    🗑️
+                  </button>
+                </div>
+                {spot.assignee && <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>👤 {spot.assignee}</div>}
+                {spot.scheduled_at && <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>🕐 {spot.scheduled_at.slice(0, 16).replace('T', ' ')}</div>}
+                <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }} onClick={e => e.stopPropagation()}>
+                  {Object.entries(STATUS).map(([key, { label, color }]) => (
+                    <button key={key} onClick={() => handleStatusChange(spot.id, key)}
+                      style={{
+                        padding: '2px 8px', fontSize: '11px', border: 'none', borderRadius: '4px', cursor: 'pointer',
+                        background: spot.status === key ? color : '#eee',
+                        color: spot.status === key ? 'white' : '#666'
+                      }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
-  )
+  </div>
+)
 }
 
 export default App

@@ -29,7 +29,7 @@ function App() {
   const [clickPos, setClickPos] = useState(null)
   const [searchKeyword, setSearchKeyword] = useState('')
   const [filterDate, setFilterDate] = useState('')
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  const [isMobile, setIsMobile] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const markersRef = useRef([])
   const recommendMarkersRef = useRef([])
@@ -85,9 +85,10 @@ function App() {
     markersRef.current = []
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
   }, [])
     
     const filtered = filterDate

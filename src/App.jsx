@@ -333,33 +333,7 @@ function App() {
     ? spots.filter(s => s.scheduled_at && s.scheduled_at.slice(0, 10) === filterDate)
     : spots
 
-전체 return 부분을 아래로 교체해줘요. state 선언 부분에도 추가 필요해요.
 
-먼저 state 선언 부분에 추가:
-
-**찾기:**
-```js
-const [filterDate, setFilterDate] = useState('')
-```
-**교체:**
-```js
-const [filterDate, setFilterDate] = useState('')
-const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
-const [drawerOpen, setDrawerOpen] = useState(false)
-```
-
-그리고 useEffect들 중 아무거나 아래에 추가:
-```js
-useEffect(() => {
-  const handleResize = () => setIsMobile(window.innerWidth < 768)
-  window.addEventListener('resize', handleResize)
-  return () => window.removeEventListener('resize', handleResize)
-}, [])
-```
-
-그 다음 return 전체를 교체:
-
-```jsx
 return (
   <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0 }}>
     {/* 상단 헤더 */}
